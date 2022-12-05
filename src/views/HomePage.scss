@@ -1,0 +1,19 @@
+.HomePage {
+    text-align: center;
+
+    .headerWrapper {
+        margin-top: 10px;
+    }
+
+    .row {
+        display: flex;
+        flex-direction: row;
+        gap: 1em;
+        padding: 2em;
+    }
+
+    .column {
+        margin: 0  !important;
+        flex: 1;
+    }
+}
