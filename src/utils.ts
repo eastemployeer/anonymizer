@@ -1,4 +1,31 @@
 import { faker } from '@faker-js/faker';
+import _ from 'lodash';
+import { DataFields } from './views/HomePage';
+
+export function classJoin(...classes: Array<string | null | undefined | false>) {
+    return classes.filter(x => x).join(" ") || undefined;
+}
+
+export const generateData = async (n: number) => {
+    const data = [];
+    const response = await fetch('diseases.json');
+    const values = await response.json();
+
+    for (let i = 0; i < n; i++) {
+        data.push({
+            name: faker.name.firstName(),
+            lastName: faker.name.lastName(),
+            city: faker.address.cityName(),
+            age: Math.floor(Math.random()*98 + 1).toString(),
+            zip: faker.address.zipCode(),
+            country: faker.address.country(),
+            sex: faker.name.sex(),
+            disease: values[Math.floor(Math.random()*4971)],
+        });
+    }
+
+    return data;
+}
 
 export const generateNames = (n: number) => {
     const names = [];
@@ -33,11 +60,11 @@ export const generateAges = (n: number) => {
 }
 
 export const generateZip = (n: number) => {
-    const state = [];
+    const zip = [];
     for (let i = 0; i < n; i++) {
-        state.push(faker.address.zipCode());
+        zip.push(faker.address.zipCode());
     }
-    return state;
+    return zip;
 }
 
 export const generateCountry = (n: number) => {
@@ -68,55 +95,170 @@ export const generateDisease = async (n: number) => {
     return diseases;
 }
 
-interface HashI {
-    [key: string]: number;
+export enum Columns {
+    name = "name",
+    lastName = "lastName",
+    age = 'age' ,
+    zip = 'zip' ,
+    city = 'city',
+    disease = 'disease',
+    country = 'country',
+    sex = 'sex'
 }
 
-interface PID {
-    [key: string]: string[];
+export const countGroupedBy = (columnName: Columns, data: any) => {
+    return Object.keys(_.groupBy(data, (item) => item[columnName])).length;
 }
 
-export const anonymize = (pid: PID, k: number, columnNames: string[], rows: number) => {
-    for (const column in pid) {
-        const shortestElement = pid[column].reduce(function(a, b) { return a.length <= b.length ? a : b;})
-        const mappedElements = pid[column].map(el => el.length > shortestElement.length? el.slice(0, shortestElement.length) : el)
-        pid[column] = mappedElements;
-        // for (let i = 0; i < shortestElement.length; i++) {
-        //     const hash: HashI = {};
-        //     mappedElements.forEach(el => {
-        //         if (!hash[el]) hash[el] = 1;
-        //         else hash[el]++;
-        //     })
-        //     for (const prop in hash) {
-        //         if (hash[prop] < )
-        //     }
-        // }
-    }
+export const shrinkElementsLengthToShortest = (data: DataFields[], pidColumns: Columns[]) => {
+    pidColumns.forEach(columnName => {
+        if (typeof data[0][columnName] === 'string') {
+            const shortestElementLength = ((data.reduce(function(a, b) { return (a[columnName] as string).length <= (b[columnName] as string).length ? a : b;}))[columnName] as string).length
+            const mappedElements = data.map(row =>  {
+                const value = row[columnName]
+                if(typeof value === 'string' && value.length > shortestElementLength) {
+                    return ({...row, [columnName]: value.slice(0, shortestElementLength)});
+                }
+                return row; 
+            })
+            data = mappedElements;
+        }
+    })
+    return data;
+}
 
-    while (true) {
-        let thresholdPassed = false;
-        const hash: HashI = {};
-        const arr = new Array(rows).fill('');
-        for (let i = 0; i < rows; i++) {
-            for (const column in pid) {
-                arr[i] += pid[column][i];
+export const kAnonymize2 = (data: DataFields[], k: number, pidColumns: Columns[]) => {
+    let dataCopy = data.map(el => ({...el}));
+    dataCopy = shrinkElementsLengthToShortest(dataCopy, pidColumns);
+
+    // console.log(dataCopy)
+
+    pidColumns.forEach(column => {
+        for (let i = 0; i < dataCopy[0][column].length; i++) {
+            let groups = _.groupBy(dataCopy, (item) => `${item[column][i]}`);
+            console.log(groups)
+            let groupUnderThresholdExists = false;
+            for (const prop in groups) {
+                if(groups[prop].length < k) {
+                    console.log(groups[prop])
+                    groupUnderThresholdExists = true;
+                    break;
+                }
+            }
+            if (groupUnderThresholdExists) {
+                for (let j = 0; j < dataCopy.length; j++) {
+                    let newVal: string | string[] = dataCopy[j][column].split('');
+                    newVal.splice(i, 1, '*');
+                    newVal = newVal.join('');
+                    dataCopy[j][column] = newVal;
+                }
+              
+                // dataCopy = dataCopy.map(row => {
+                //     console.log(row[column])
+                //     console.log("I: ", i)
+                //     console.log(row[column].split('').splice(1, 1, 'x'))
+                //     return ({...row, [column]: row[column].split('').splice(i, 1, '*').join('')})
+                // });
             }
         }
-        for (let i = 0; i < rows; i++) {
-            if (hash[arr[i]]) hash[arr[i]]++;
-            else hash[arr[i]] = 1;
-        }
+    });
 
-        for (const prop in hash) {
-            if (hash[prop] < k) {
+    return bruteForceKAnonymize(dataCopy, k, pidColumns);
+}
+
+export const bruteForceKAnonymize = (data: DataFields[], k: number, pidColumns: Columns[]): DataFields[] => {
+    let dataCopy = data.map(el => ({...el}));
+    let groups;
+    let columnIndex = 0;
+
+    while (true) {
+        groups = _.groupBy(dataCopy, item => pidColumns.reduce((acc, curr) => {acc += `${item[curr]}+`; return acc;}, '').slice(0, -1));
+        let thresholdPassed = true;
+        for (const prop in groups) {
+            if(groups[prop].length < k) {
                 thresholdPassed = false;
                 break;
-            } else thresholdPassed = true;
+            }
         }
+        if (thresholdPassed) break;
+        console.log(groups);
+        
+        let currentPidColumn = pidColumns[columnIndex] as Columns;
 
-        if (thresholdPassed) return 
+        // eslint-disable-next-line no-loop-func
+        dataCopy = dataCopy.map((row, idx, arr) => {
+            let tempRow = JSON.parse(JSON.stringify(row));
+            let value = row[currentPidColumn];
+            if (typeof value === 'string') {
+                // const groupsFormedBySpecificLetter = _.groupBy(arr, item => `${item[currentPidColumn]}`.split('')[pidColumnsIndexTracker[columnIndex]])
+                const charsDifferentThanStar = value.split('').filter(el => el !== '*').length;
+                if (value.includes('*') && charsDifferentThanStar > 0) value = value.substring(0, value.indexOf('*') - 1) + '*' + value.substring(value.indexOf('*'));
+                else if (charsDifferentThanStar) value = value.slice(0, -1) + '*';
+                tempRow[currentPidColumn] = value;
+            }
+            return tempRow;
+        })
+        console.log(dataCopy);
+
+        if (columnIndex + 1 > pidColumns.length - 1) {
+            columnIndex = 0;
+        } else columnIndex++;
     }
-
-
-
+    console.log(groups);
+    return dataCopy;
 }
+
+export const lDiversify = (data: DataFields[], k: number, pidColumns: Columns[]): DataFields[] => {
+    let dataCopy = data.map(el => ({...el}));
+    dataCopy = shrinkElementsLengthToShortest(dataCopy, pidColumns);
+}
+
+export const kAnonymize = (data: DataFields[], k: number, pidColumns: Columns[]): DataFields[] => {
+    let dataCopy = data.map(el => ({...el}));
+
+    dataCopy = shrinkElementsLengthToShortest(dataCopy, pidColumns);
+
+    let groups;
+
+    let columnIndex = 0;
+
+    while (true) {
+        groups = _.groupBy(dataCopy, item => pidColumns.reduce((acc, curr) => {acc += `${item[curr]}+`; return acc;}, '').slice(0, -1));
+        let thresholdPassed = true;
+        for (const prop in groups) {
+            if(groups[prop].length < k) {
+                thresholdPassed = false;
+                break;
+            }
+        }
+        if (thresholdPassed) break;
+        console.log(groups);
+        
+        let currentPidColumn = pidColumns[columnIndex] as Columns;
+
+        // eslint-disable-next-line no-loop-func
+        dataCopy = dataCopy.map((row, idx, arr) => {
+            let tempRow = JSON.parse(JSON.stringify(row));
+            let value = row[currentPidColumn];
+            if (typeof value === 'string') {
+                // const groupsFormedBySpecificLetter = _.groupBy(arr, item => `${item[currentPidColumn]}`.split('')[pidColumnsIndexTracker[columnIndex]])
+                const charsDifferentThanStar = value.split('').filter(el => el !== '*').length;
+                if (value.includes('*') && charsDifferentThanStar > 0) value = value.substring(0, value.indexOf('*') - 1) + '*' + value.substring(value.indexOf('*'));
+                else if (charsDifferentThanStar) value = value.slice(0, -1) + '*';
+                tempRow[currentPidColumn] = value;
+            }
+            return tempRow;
+        })
+        console.log(dataCopy);
+
+        if (columnIndex + 1 > pidColumns.length - 1) {
+            columnIndex = 0;
+        } else columnIndex++;
+    }
+    console.log(groups);
+    return dataCopy;
+}
+
+
+
+

@@ -1,6 +1,17 @@
 .HomePage {
     text-align: center;
 
+    .actionWrapper {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1em;
+    }
+
+    .form .field {
+        margin: 0;
+    }
+
     .headerWrapper {
         margin-top: 10px;
     }
@@ -9,6 +20,9 @@
         display: flex;
         flex-direction: row;
         gap: 1em;
+    }
+
+    .tableRow {
         padding: 2em;
     }
 
@@ -16,4 +30,12 @@
         margin: 0  !important;
         flex: 1;
     }
+
+    .paginationWrapper {
+        padding-top: 2em;
+    }
+}
+
+.checkboxesWrapper {
+    font-size: 1.5em;
 }
