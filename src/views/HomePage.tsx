@@ -56,15 +56,28 @@ export default function HomePage() {
         setSorted(!sorted);
     }, [sorted])
 
+    const showAmountOfDifferentDiseasesInEachGroup = useCallback(() => {
+        let uniqueDiseasesPerGroup: number[] = [];
+        Object.values(_.groupBy(anonymizedData, item => PIDValues.reduce((acc, curr) => {acc += `${item[curr]}+`; return acc;}, '').slice(0, -1))).forEach(group => {
+            let diseasesCount = [...new Set(group.map(el => el.disease))].length;
+            uniqueDiseasesPerGroup.push(diseasesCount);
+        });
+        console.log(uniqueDiseasesPerGroup);
+    }, [PIDValues, anonymizedData]);
+
     const onAnonymize = useCallback(() => {
         console.log(anonymizationOption)
         if (data === null) return;
         if (anonymizationOption === 'k') {
-            const anonData = factory.kAnonymize2(data, parameter, PIDValues); 
+            const anonData = factory.kAnonymize(data, parameter, PIDValues); 
             setSortedAnonymizedData(Object.values(_.groupBy(anonData, item => PIDValues.reduce((acc, curr) => {acc += `${item[curr]}+`; return acc;}, '').slice(0, -1))).flat())
             setAnonymizedData(anonData);
         }
-        if (anonymizationOption === 'l') return;
+        if (anonymizationOption === 'l') {
+            const anonData = factory.lDiversify(data, parameter, PIDValues); 
+            setSortedAnonymizedData(Object.values(_.groupBy(anonData, item => PIDValues.reduce((acc, curr) => {acc += `${item[curr]}+`; return acc;}, '').slice(0, -1))).flat())
+            setAnonymizedData(anonData);
+        };
     }, [data, PIDValues, anonymizationOption, parameter])
 
     const onPageChange = useCallback((event: React.MouseEvent<HTMLAnchorElement, MouseEvent>, data: PaginationProps) => {
@@ -123,6 +136,7 @@ export default function HomePage() {
             <div className="row">
                 <PIDModal setData={setPID} data={PID} />
                 <HierarchyModal PIDValues={PIDValues} data={data} />
+                <Button onClick={showAmountOfDifferentDiseasesInEachGroup}>Show number of unique diseases in each group</Button>
             </div>
             {data && 
                 <div className="paginationWrapper row">
